@@ -1,0 +1,35 @@
+# Environnement & Dépendances
+venv/
+node_modules/
+.env
+
+# Builds & Output
+dist/
+build/
+*.egg-info/
+
+
+# Python & Cache
+__pycache__/
+*.pyc
+*.sqlite3
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+
+# Environnements virtuels
+venv/
+.venv/
+env/
+ENV/
+
+# Profil de navigation (nodriver / Chrome)
+chrome_profile/
+
+# Logs de scraping générés (un fichier par run)
+logs/
+
+# Métadonnées du dernier run (régénéré à chaque scraping)
+media/data/last_run.json

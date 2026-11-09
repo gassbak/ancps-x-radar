@@ -1,0 +1,156 @@
+=============================================================================
+GUIDE TECHNIQUE ET PRATIQUE : BACKEND RADAR_JOBS & INTÉGRATION FRONTEND
+=============================================================================
+
+Ce guide réunit tout ce qu'un développeur doit savoir pour connecter le frontend
+à l'application `radar_jobs` de l'API Django, étendre les fonctionnalités de
+scraping sans altérer le frontend, et gérer l'exécution du scraping au quotidien.
+
+-----------------------------------------------------------------------------
+1. LE PROTOCOLE DE SCRAPING & LA GESTION DE CLOUDFLARE EN LOCAL
+-----------------------------------------------------------------------------
+IMPORTANT : À l'origine, le site EmploiSenegal n'avait pas de protection
+Cloudflare. Le scraping s'exécutait de manière 100% automatisée sans
+intervention. Récemment, le site a intégré la protection Cloudflare Turnstile,
+ce qui nécessite d'adapter le processus localement.
+
+Comment se déroule le scraping aujourd'hui ?
+- Le scraping se lance en local via la commande :
+  python manage.py scrape_jobs
+- En raison de Cloudflare Turnstile, le scraper utilise un navigateur piloté
+  en arrière-plan (via la librairie Python `nodriver`) et ouvre une fenêtre.
+- **Intervention manuelle requise** : Dès que l'onglet s'ouvre sur le défi de
+  sécurité, vous devez cliquer MANUELLEMENT 1 fois sur la case à cocher
+  Cloudflare ("Vérifiez que vous êtes un humain").
+- Dès que vous avez coché la case, le défi est résolu, et le reste du scraping
+  continue de manière entièrement automatisée durant environ 3 minutes.
+- Les cookies de session (`cf_clearance` inclus) sont automatiquement extraits
+  et synchronisés avec le client HTTP rapide pour optimiser les requêtes suivantes.
+
+-----------------------------------------------------------------------------
+2. ARCHITECTURE DE COMMUNICATION ET AUTHENTIFICATION
+-----------------------------------------------------------------------------
+L'application `radar_jobs` communique avec son frontend via des requêtes HTTP REST.
+
+- Authentification Stateless JWT :
+  Le backend n'utilise pas de session. Chaque requête sécurisée doit inclure
+  un Token JWT dans l'en-tête de requête standard :
+  Authorization: Bearer <votre_token_jwt>
+
+  Ce JWT est signé avec une clé secrète partagée (`JWT_SECRET` dans le fichier `.env`).
+  Il contient une payload incluant le rôle (statut) de l'utilisateur :
+  - 'admin' : Accès total (incluant le déclenchement de scraping).
+  - 'coach' : Accès standard (consultation des insights et chat).
+
+- Configuration CORS :
+  Pour autoriser le frontend (par exemple, React local sur le port 3000), configurez
+  le fichier `.env` avec :
+  CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+
+  De plus, Sentry exigeant des en-têtes spécifiques, les requêtes du frontend
+  doivent pouvoir inclure les en-têtes 'baggage' et 'sentry-trace'. Ceux-ci sont
+  configurés dans la liste globale de CORS_ALLOW_HEADERS.
+
+-----------------------------------------------------------------------------
+3. ENDPOINTS DE L'API RADAR JOBS
+-----------------------------------------------------------------------------
+Tous les endpoints sont accessibles via deux préfixes pour une compatibilité
+totale avec les versions du frontend :
+- `/api/radar_jobs/`
+- `/api/job-insights/`
+
+Voici les endpoints disponibles :
+
+A. Statut du Pipeline & Données Traitées
+   - URL : GET `/api/radar_jobs/status/` ou `/api/job-insights/status/`
+   - Description : Renvoie le statut du dernier scraping, le nombre d'offres,
+     la date de mise à jour, et la liste structurée des secteurs d'activité.
+   - Format de réponse JSON :
+     {
+       "status": "success",
+       "last_update": "2023-11-20T15:30:00Z",
+       "total_jobs": 420,
+       "processed_file_exists": true,
+       "sectors": ["Informatique", "Banque", "Marketing", "Télécom"]
+     }
+
+B. Liste des Offres d'Emploi avec Filtrage et Pagination
+   - URL : GET `/api/radar_jobs/jobs/` ou `/api/job-insights/jobs/`
+   - Paramètres de requête (Query Params) :
+     - `sector` : Filtrer par secteur (ex: "Informatique")
+     - `search` : Terme de recherche textuelle libre dans le titre ou les compétences.
+     - `page` : Numéro de page (par défaut: 1)
+     - `limit` : Nombre d'éléments par page (par défaut: 10)
+   - Format de réponse JSON :
+     {
+       "total": 45,
+       "page": 1,
+       "limit": 10,
+       "pages": 5,
+       "jobs": [
+         {
+           "id": "ES-12345",
+           "title": "Développeur Fullstack React/Django",
+           "company": "Bakeli Tech",
+           "location": "Dakar, Sénégal",
+           "coordinates": [14.7167, -17.4677],  // Format strict [lat, long]
+           "sector": "Informatique",
+           "experience_years": 3,
+           "key_skills": ["React", "Django", "Python", "SQL"], // Liste de chaînes
+           "matching_score": 85.0,
+           "url": "https://www.emploisenegal.com/offre-12345"
+         }
+       ]
+     }
+
+C. Téléchargement du CSV des Offres
+   - URL : GET `/api/radar_jobs/download/csv/` ou `/api/job-insights/download/csv/`
+   - Description : Renvoie le fichier CSV complet (`jobs_senegal_processed.csv`)
+     en pièce jointe de téléchargement direct.
+
+D. Déclenchement du Scraping (Réservé aux Administrateurs)
+   - URL : POST `/api/radar_jobs/scrape/` ou `/api/job-insights/scrape/`
+   - Sécurité : Exige un Token JWT valide avec le statut 'admin'.
+   - Description : Lance le pipeline de scraping en arrière-plan.
+
+E. Chat de Conseils & Analyse d'Opportunités
+   - URL : POST `/api/radar_jobs/chat/` ou `/api/job-insights/chat/`
+   - Description : Permet à un candidat ou un coach d'échanger avec l'IA.
+   - Corps de requête (JSON) :
+     {
+       "message": "Quelles sont les compétences les plus demandées en Informatique ?",
+       "sector": "Informatique" // Optionnel pour focaliser la discussion
+     }
+   - Format de réponse JSON :
+     {
+       "response": "En informatique à Dakar, les compétences les plus recherchées sont..."
+     }
+
+-----------------------------------------------------------------------------
+4. STRATÉGIE D'EXTENSION MULTI-SOURCES (SANS IMPACT SUR LE FRONTEND)
+-----------------------------------------------------------------------------
+Si vous souhaitez étendre le scraping à d'autres plateformes (Ex: EmploiDakar,
+Expat-Dakar, LinkedIn) sans jamais modifier le code de votre frontend, suivez
+cette architecture de normalisation :
+
+1. Normalisation des IDs de Jobs (Préfixes)
+   Générez un ID unique pour chaque offre combinant la source et l'identifiant d'origine :
+   - EmploiSenegal : `ES-<id>` (ex: `ES-56123`)
+   - EmploiDakar : `ED-<id>` (ex: `ED-89042`)
+   - LinkedIn : `LI-<id>` (ex: `LI-77239103`)
+
+2. Uniformisation de l'export CSV
+   Tous les scrapers doivent alimenter un unique fichier CSV consolidé situé à
+   `media/data/jobs_senegal_processed.csv`. Le pipeline combine, déduplique et
+   structure les données dans ce format unique :
+   - `id`, `title`, `company`, `location`, `sector`, `key_skills` (formaté en JSON array),
+     `experience_years`, `coordinates` (tableau de flottants `[latitude, longitude]`),
+     `matching_score`, `url`.
+
+3. Traitement robuste des données manquantes (JSON)
+   Le backend convertit automatiquement toutes les valeurs manquantes de Pandas
+   (`NaN`, `Inf`) en valeurs nulles JSON (`null`) pour garantir la compatibilité
+   du parseur JSON du frontend.
+
+En respectant ce standard de données, vous pouvez ajouter 10 nouvelles sources de
+scraping sans toucher à une seule ligne de code de votre application React/Laravel !
