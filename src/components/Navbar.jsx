@@ -53,6 +53,16 @@ export const Navbar = ({ activeTab, setActiveTab, onOpenAlerts, onOpenAi }) => {
           >
             Partenaires
           </button>
+          <button
+            onClick={() => handleNavClick('formations')}
+            className={`font-medium transition-colors cursor-pointer ${
+              activeTab === 'formations'
+                ? 'text-emerald-600 font-semibold'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Formations & Certifications
+          </button>
         </nav>
 
         {/* Actions (Alerts, CV Score, Radar AI) & Mobile Hamburger */}
@@ -117,6 +127,16 @@ export const Navbar = ({ activeTab, setActiveTab, onOpenAlerts, onOpenAi }) => {
             }`}
           >
             Partenaires
+          </button>
+          <button
+            onClick={() => handleNavClick('formations')}
+            className={`text-left px-4 py-2.5 rounded-xl font-medium transition-colors ${
+              activeTab === 'formations'
+                ? 'bg-emerald-50 text-emerald-700 font-semibold'
+                : 'text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            Formations & Certifications
           </button>
         </div>
       )}

@@ -13,6 +13,7 @@ export const RootLayout = () => {
   const getActiveTabFromPath = (path) => {
     if (path.startsWith('/trends')) return 'trends';
     if (path.startsWith('/partners')) return 'partners';
+    if (path.startsWith('/formations')) return 'formations';
     if (path.startsWith('/opportunities')) return 'opportunities';
     return 'home';
   };
@@ -23,6 +24,7 @@ export const RootLayout = () => {
     if (tab === 'opportunities') navigate('/opportunities');
     else if (tab === 'trends') navigate('/trends');
     else if (tab === 'partners') navigate('/partners');
+    else if (tab === 'formations') navigate('/formations');
     else navigate('/');
   };
 

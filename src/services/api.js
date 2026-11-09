@@ -12,6 +12,7 @@ const normalizeBaseUrl = (raw, fallback) => {
 const API_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL, "https://api-wagan.bakeli.tech/api/radar_jobs");
 const CV_API_URL = normalizeBaseUrl(import.meta.env.VITE_CV_API_URL, "https://api-wagan.bakeli.tech/api/cv-scoring");
 const AUTH_API_URL = normalizeBaseUrl(import.meta.env.VITE_AUTH_API_URL, "https://api-wagan.bakeli.tech/api/auth");
+const ANCPS_API_URL = (import.meta.env.VITE_ANCPS_API_URL || "http://localhost:5000/api").replace(/\/+$/, "");
 
 // Fallback data when backend is incomplete / unreachable
 const FALLBACK_OPPORTUNITIES = [
@@ -531,5 +532,26 @@ export const apiService = {
     } catch {
       return { brevo_configured: false };
     }
+  },
+
+  async getCertifications() {
+    const response = await fetch(`${ANCPS_API_URL}/certifications?published=true`);
+
+    if (!response.ok) {
+      throw new Error(`Impossible de charger les certifications (erreur ${response.status}).`);
+    }
+
+    let result;
+    try {
+      result = await response.json();
+    } catch {
+      throw new Error("L’API ANCPS a renvoyé une réponse invalide.");
+    }
+
+    if (!Array.isArray(result.data)) {
+      throw new Error("La réponse de l’API ANCPS ne contient pas la liste attendue.");
+    }
+
+    return result.data;
   },
 };
