@@ -534,24 +534,60 @@ export const apiService = {
     }
   },
 
-  async getCertifications() {
-    const response = await fetch(`${ANCPS_API_URL}/certifications?published=true`);
+
+  
+async getCertifications() {
+  const url =
+    "https://ancps-senegal.vercel.app/api/certifications?published=true";
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json"
+      }
+    });
+
+    const text = await response.text();
+
+    console.log("[ANCPS] HTTP:", response.status);
+    console.log("[ANCPS] Réponse brute:", text);
 
     if (!response.ok) {
-      throw new Error(`Impossible de charger les certifications (erreur ${response.status}).`);
+      throw new Error(
+        `Erreur ANCPS ${response.status}: ${text.slice(0, 300)}`
+      );
     }
 
     let result;
+
     try {
-      result = await response.json();
+      result = JSON.parse(text);
     } catch {
-      throw new Error("L’API ANCPS a renvoyé une réponse invalide.");
+      throw new Error(
+        "L'API ANCPS ne renvoie pas une réponse JSON valide."
+      );
     }
 
-    if (!Array.isArray(result.data)) {
-      throw new Error("La réponse de l’API ANCPS ne contient pas la liste attendue.");
+    const certifications = Array.isArray(result)
+      ? result
+      : result.data;
+
+    if (!Array.isArray(certifications)) {
+      console.error("[ANCPS] Format reçu:", result);
+      throw new Error(
+        "La réponse ANCPS ne contient pas de tableau de certifications."
+      );
     }
 
-    return result.data;
-  },
+    return certifications;
+
+  } catch (error) {
+    console.error("[ANCPS] Erreur complète:", error);
+    throw error;
+  }
+},
+
 };
+
+
