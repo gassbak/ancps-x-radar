@@ -6,6 +6,7 @@ import { JobDetailPage } from './pages/JobDetailPage';
 import { MarketInsightsPage } from './pages/MarketInsightsPage';
 import { PartnersPage } from './pages/PartnersPage';
 import { FormationsPage } from './pages/FormationsPage';
+import { FormationDetailPage } from './pages/FormationDetailPage';
 
 export function App() {
   return (
@@ -17,6 +18,7 @@ export function App() {
         <Route path="/trends" element={<MarketInsightsPage />} />
         <Route path="/partners" element={<PartnersPage />} />
         <Route path="/formations" element={<FormationsPage />} />
+        <Route path="/formations/:id" element={<FormationDetailPage />} />
       </Route>
     </Routes>
   );

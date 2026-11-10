@@ -14,6 +14,26 @@ const CV_API_URL = normalizeBaseUrl(import.meta.env.VITE_CV_API_URL, "https://ap
 const AUTH_API_URL = normalizeBaseUrl(import.meta.env.VITE_AUTH_API_URL, "https://api-wagan.bakeli.tech/api/auth");
 const ANCPS_API_URL = (import.meta.env.VITE_ANCPS_API_URL || "https://ancps-senegal-cvke.onrender.com/api").replace(/\/+$/, "");
 
+const fetchAncpsJson = async (endpoint) => {
+  const response = await fetch(`${ANCPS_API_URL}${endpoint}`, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+  const text = await response.text();
+
+  if (!response.ok) {
+    throw new Error(`Erreur ANCPS ${response.status}: ${text.slice(0, 300)}`);
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("L'API ANCPS ne renvoie pas une réponse JSON valide.");
+  }
+};
+
 // Fallback data when backend is incomplete / unreachable
 const FALLBACK_OPPORTUNITIES = [
   {
@@ -537,37 +557,8 @@ export const apiService = {
 
   
 async getCertifications() {
-  const url = `${ANCPS_API_URL}/certifications?published=true`;
-
   try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        Accept: "application/json"
-      }
-    });
-
-    const text = await response.text();
-
-    console.log("[ANCPS] HTTP:", response.status);
-    console.log("[ANCPS] Réponse brute:", text);
-
-    if (!response.ok) {
-      throw new Error(
-        `Erreur ANCPS ${response.status}: ${text.slice(0, 300)}`
-      );
-    }
-
-    let result;
-
-    try {
-      result = JSON.parse(text);
-    } catch {
-      throw new Error(
-        "L'API ANCPS ne renvoie pas une réponse JSON valide."
-      );
-    }
-
+    const result = await fetchAncpsJson("/certifications?published=true");
     const certifications = Array.isArray(result)
       ? result
       : result.data;
@@ -587,5 +578,23 @@ async getCertifications() {
   }
 },
 
-};
+async getCertification(id) {
+  if (!id) {
+    throw new Error("L'identifiant de la certification est requis.");
+  }
 
+  const result = await fetchAncpsJson(
+    `/certifications/${encodeURIComponent(id)}`
+  );
+  const certification = result?.data && !Array.isArray(result.data)
+    ? result.data
+    : result;
+
+  if (!certification || typeof certification !== "object" || Array.isArray(certification)) {
+    throw new Error("La réponse ANCPS ne contient pas cette certification.");
+  }
+
+  return certification;
+},
+
+};
