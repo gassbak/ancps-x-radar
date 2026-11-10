@@ -2,7 +2,7 @@ import React from 'react';
 import { OpportunityCard } from './OpportunityCard';
 import { Inbox } from 'lucide-react';
 
-export const OpportunityList = ({ opportunities, lastUpdated, onSelectOpportunity }) => {
+export const OpportunityList = ({ opportunities, lastUpdated, loading, error, onSelectOpportunity }) => {
   return (
     <div className="flex-1 flex flex-col gap-6">
       
@@ -17,7 +17,15 @@ export const OpportunityList = ({ opportunities, lastUpdated, onSelectOpportunit
       </div>
 
       {/* Grid of opportunities */}
-      {opportunities.length === 0 ? (
+      {error ? (
+        <div role="alert" className="bg-red-50 text-red-700 rounded-2xl p-6 border border-red-100">
+          Impossible de charger les résultats : {error}
+        </div>
+      ) : loading ? (
+        <p role="status" className="bg-white rounded-2xl p-12 text-center text-gray-500 border border-gray-100">
+          Chargement des résultats…
+        </p>
+      ) : opportunities.length === 0 ? (
         <div className="bg-white rounded-2xl p-12 text-center border border-gray-100 flex flex-col items-center justify-center gap-4">
           <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600">
             <Inbox className="w-8 h-8" />

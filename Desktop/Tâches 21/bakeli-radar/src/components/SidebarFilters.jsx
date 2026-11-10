@@ -8,7 +8,8 @@ const OFFER_TYPES = [
   "Bourse",
   "Concours",
   "Prestation",
-  "Formation"
+  "Formation",
+  "Certifications"
 ];
 
 const REGIONS = [

@@ -12,7 +12,7 @@ const normalizeBaseUrl = (raw, fallback) => {
 const API_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL, "https://api-wagan.bakeli.tech/api/radar_jobs");
 const CV_API_URL = normalizeBaseUrl(import.meta.env.VITE_CV_API_URL, "https://api-wagan.bakeli.tech/api/cv-scoring");
 const AUTH_API_URL = normalizeBaseUrl(import.meta.env.VITE_AUTH_API_URL, "https://api-wagan.bakeli.tech/api/auth");
-const ANCPS_API_URL = (import.meta.env.VITE_ANCPS_API_URL || "http://localhost:5000/api").replace(/\/+$/, "");
+const ANCPS_API_URL = (import.meta.env.VITE_ANCPS_API_URL || "https://ancps-senegal-cvke.onrender.com/api").replace(/\/+$/, "");
 
 // Fallback data when backend is incomplete / unreachable
 const FALLBACK_OPPORTUNITIES = [
@@ -537,8 +537,7 @@ export const apiService = {
 
   
 async getCertifications() {
-  const url =
-    "https://ancps-senegal.vercel.app/api/certifications?published=true";
+  const url = `${ANCPS_API_URL}/certifications?published=true`;
 
   try {
     const response = await fetch(url, {
@@ -589,5 +588,4 @@ async getCertifications() {
 },
 
 };
-
 
