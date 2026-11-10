@@ -1,7 +1,7 @@
 import React from 'react';
 import { Building2, MapPin, Calendar, ChevronRight } from 'lucide-react';
 
-export const OpportunityCard = ({ opportunity, onSelect }) => {
+export const OpportunityCard = ({ opportunity, onSelect, footerContent }) => {
   const { title, company, type, description, tags, location, date, highlighted } = opportunity;
 
   // Badge styling based on type
@@ -19,6 +19,8 @@ export const OpportunityCard = ({ opportunity, onSelect }) => {
         return 'bg-slate-100 text-slate-700 border border-slate-200/60';
       case 'formation':
         return 'bg-zinc-100 text-zinc-700 border border-zinc-200/60';
+      case 'certification':
+        return 'bg-emerald-50 text-emerald-700 border border-emerald-200/60';
       default:
         return 'bg-gray-100 text-gray-700 border border-gray-200';
     }
@@ -26,8 +28,10 @@ export const OpportunityCard = ({ opportunity, onSelect }) => {
 
   return (
     <div 
-      onClick={() => onSelect && onSelect(opportunity)}
-      className={`bg-white rounded-2xl p-6 border transition-all duration-300 hover:shadow-lg flex flex-col justify-between cursor-pointer group relative ${
+      onClick={onSelect ? () => onSelect(opportunity) : undefined}
+      className={`bg-white rounded-2xl p-6 border transition-all duration-300 hover:shadow-lg flex flex-col justify-between group relative ${
+        onSelect ? 'cursor-pointer' : 'cursor-default'
+      } ${
         highlighted 
           ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-md' 
           : 'border-gray-100 hover:border-emerald-200'
@@ -77,24 +81,27 @@ export const OpportunityCard = ({ opportunity, onSelect }) => {
         )}
       </div>
 
-      {/* Footer: Location, Date & View */}
-      <div className="pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500 font-medium">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5">
-            <MapPin className="w-3.5 h-3.5 text-gray-400" />
-            <span>{location}</span>
+      {footerContent !== undefined ? footerContent : (
+        <div className="pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500 font-medium">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-gray-400" />
+              <span>{location}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-gray-400" />
+              <span>{date}</span>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5 text-gray-400" />
-            <span>{date}</span>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-1 text-emerald-600 font-semibold group-hover:translate-x-1 transition-transform">
-          <span>Voir</span>
-          <ChevronRight className="w-4 h-4" />
+          {onSelect && (
+            <div className="flex items-center gap-1 text-emerald-600 font-semibold group-hover:translate-x-1 transition-transform">
+              <span>Voir</span>
+              <ChevronRight className="w-4 h-4" />
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
     </div>
   );

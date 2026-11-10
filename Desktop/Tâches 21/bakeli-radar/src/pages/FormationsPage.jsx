@@ -1,19 +1,47 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { OpportunityCard } from '../components/OpportunityCard';
 import { apiService } from '../services/api';
 
 const getLabel = (value) => {
-  if (typeof value === 'string' || typeof value === 'number') return value;
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
   if (value && typeof value === 'object') {
-    return value.nom || value.name || value.title || 'Non précisé';
+    const label = value.nom || value.name || value.title;
+    return typeof label === 'string' || typeof label === 'number' ? String(label) : '';
   }
-  return 'Non précisé';
+  return '';
 };
 
 export const FormationsPage = () => {
   const { data: certifications = [], isLoading, error } = useQuery({
     queryKey: ['certifications'],
     queryFn: () => apiService.getCertifications(),
+  });
+
+  const certificationCards = certifications.map((certification, index) => {
+    const sigle = getLabel(certification.sigle);
+    const title = getLabel(certification.title) || sigle || 'Certification';
+    const details = [
+      { label: 'Domaine', value: getLabel(certification.domaine) },
+      {
+        label: 'Niveau',
+        value: getLabel(certification.niveauSortie || certification.niveauEntree),
+      },
+      { label: 'Durée', value: getLabel(certification.duree) },
+      { label: 'Modalité', value: getLabel(certification.modalite) },
+    ].filter((detail) => detail.value);
+
+    return {
+      id: String(certification._id || certification.id || `${title}-${index}`),
+      opportunity: {
+        title,
+        company: getLabel(certification.organisme) || 'Organisme non précisé',
+        type: 'Certification',
+        description: getLabel(certification.description),
+        tags: sigle ? [sigle] : [],
+      },
+      details,
+    };
   });
 
   return (
@@ -57,47 +85,24 @@ export const FormationsPage = () => {
             {certifications.length} certification{certifications.length > 1 ? 's' : ''}
           </p>
 
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {certifications.map((certification) => (
-              <article
-                key={certification._id || certification.id}
-                className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"
-              >
-                <h2 className="text-lg font-semibold text-gray-900">
-                  {getLabel(certification.title || certification.sigle)}
-                </h2>
-
-                {certification.description && (
-                  <p className="mt-3 line-clamp-4 text-sm leading-6 text-gray-600">
-                    {certification.description}
-                  </p>
-                )}
-
-                <dl className="mt-4 space-y-2 text-sm">
-                  <div>
-                    <dt className="inline font-medium text-gray-700">Organisme : </dt>
-                    <dd className="inline text-gray-600">{getLabel(certification.organisme)}</dd>
-                  </div>
-                  <div>
-                    <dt className="inline font-medium text-gray-700">Domaine : </dt>
-                    <dd className="inline text-gray-600">{getLabel(certification.domaine)}</dd>
-                  </div>
-                  <div>
-                    <dt className="inline font-medium text-gray-700">Niveau : </dt>
-                    <dd className="inline text-gray-600">
-                      {getLabel(certification.niveauSortie || certification.niveauEntree)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="inline font-medium text-gray-700">Durée : </dt>
-                    <dd className="inline text-gray-600">{getLabel(certification.duree)}</dd>
-                  </div>
-                  <div>
-                    <dt className="inline font-medium text-gray-700">Modalité : </dt>
-                    <dd className="inline text-gray-600">{getLabel(certification.modalite)}</dd>
-                  </div>
-                </dl>
-              </article>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {certificationCards.map(({ id, opportunity, details }) => (
+              <OpportunityCard
+                key={id}
+                opportunity={opportunity}
+                footerContent={details.length > 0 ? (
+                  <dl className="grid grid-cols-2 gap-x-3 gap-y-2 border-t border-gray-100 pt-4 text-xs">
+                    {details.map(({ label, value }) => (
+                      <div key={label} className="min-w-0">
+                        <dt className="font-medium text-gray-500">{label}</dt>
+                        <dd className="truncate text-gray-700" title={value}>
+                          {value}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : null}
+              />
             ))}
           </div>
         </>
