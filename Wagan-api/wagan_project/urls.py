@@ -28,12 +28,11 @@ urlpatterns = [
     path('api/radar_jobs/', include('radar_jobs.urls')),
     path('api/job-insights/', include('radar_jobs.urls')),
     path('api/cv-scoring/', include('cv_scoring.urls')),
-        path('api/annuaire/', include('annuaire.urls')),
+    path('api/annuaire/', include('annuaire.urls')),
     path('api/auth/', include('djoser.urls')),
     path('api/auth/', include('djoser.urls.jwt')),
     path('api/auth/social/', include('social_django.urls', namespace='social')),
     path('api/auth/', include('djoser.social.urls')),
-    path('api/ancps/', include('ancps.urls')),
     # ✅ Callback Google backend-side (pas de cookie cross-origin requis)
     path('api/auth/google/callback/', GoogleCallbackView.as_view(), name='google-callback'),
     path('whatsapp/', include('whatsapp_bot.urls')),
@@ -42,4 +41,3 @@ urlpatterns = [
     re_path(r"^api/swagger/$", schema_view.with_ui("swagger", cache_timeout=0), name="schema-swagger-ui"),
     re_path(r"^api/redoc/$", schema_view.with_ui("redoc", cache_timeout=0), name="schema-redoc"),
 ]
-
