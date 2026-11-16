@@ -315,6 +315,11 @@ CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "False") == "Tr
 from celery.schedules import crontab
 
 CELERY_BEAT_SCHEDULE = {
+    'sync-ancps-certifications-daily': {
+        'task': 'radar_jobs.tasks.sync_ancps_certifications_task',
+        'schedule': crontab(hour=3, minute=0),
+        'args': (),
+    },
     'scrape-jobs-daily': {
         'task': 'radar_jobs.tasks.scrape_jobs_task',
         'schedule': crontab(hour=2, minute=0),  # Tous les jours à 2h du matin

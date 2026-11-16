@@ -3,6 +3,7 @@ from .views_chat import chat_view
 from .views_jobs import status_view, download_csv_view, jobs_list_view, job_detail_view, partners_view
 from .views_system import trigger_scrape_view, health_check_view, scraping_status_view
 from .views_alerts import alert_create_view, alert_list_view, alert_delete_view, alert_status_view
+from .views_certifications import certifications_list_view, certification_detail_view
 
 urlpatterns = [
     path('chat/', chat_view, name='chat'),
@@ -10,6 +11,8 @@ urlpatterns = [
     path('download/csv/', download_csv_view, name='download_csv'),
     path('jobs/', jobs_list_view, name='jobs_list'),
     path('jobs/<path:job_id>/', job_detail_view, name='job_detail'),
+    path('certifications/', certifications_list_view, name='certifications_list'),
+    path('certifications/<str:certification_id>/', certification_detail_view, name='certification_detail'),
     path('partners/', partners_view, name='partners_list'),
     path('scrape/', trigger_scrape_view, name='trigger_scrape'),
     path('health/', health_check_view, name='health_check'),

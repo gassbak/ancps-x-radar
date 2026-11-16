@@ -1,5 +1,6 @@
 # Environnement & Dépendances
 venv/
+.venv-ancps/
 node_modules/
 .env
 

@@ -13,6 +13,7 @@ radar_jobs/
 ├── data/sites_config.py      # Liste des sites à scraper (4 actifs)
 ├── services/
 │   ├── pipeline.py           # Orchestrateur async multi-sites
+│   ├── ancps_sync.py         # Synchronisation des certifications ANCPS vers Radar
 │   └── scrapers/
 │       ├── base_scraper.py       # HTTP (curl_cffi) + fallback Selenium/nodriver
 │       ├── expat_dakar.py        # expat-dakar.com
@@ -26,11 +27,13 @@ radar_jobs/
 ├── views_helpers.py          # SYNONYMS, expand_query, ensure_type_column, clean_df_for_json
 ├── views_chat.py             # POST chat/ (RAG + Groq)
 ├── views_jobs.py             # GET status/, jobs/, jobs/<id>/, download/csv/
+├── views_certifications.py   # GET certifications/ et certifications/<id>/
 ├── views_system.py           # POST scrape/, GET health/, monitoring/
 ├── views.py                  # Ré-exports compatibilité
 ├── views_alerts.py           # Alertes candidats + statut Brevo
 ├── tasks.py                  # Tâche Celery Beat
 ├── management/commands/scrape_jobs.py
+├── management/commands/sync_ancps_certifications.py
 └── urls.py
 ```
 
@@ -94,6 +97,8 @@ async def run_pipeline(max_pages=2) -> PipelineResult
 |---------|-----|-----|------|-------------|
 | POST | `chat/` | `chat_view:70` | `AllowAny` | RAG + Groq. Body `{messages:[{role,content}]}`. `429` avec `Retry-After` ou fallback local |
 | GET | `jobs/` | `jobs_list_view:278` | `AllowAny` | `?sector=&location=&search=&page=&limit=` |
+| GET | `certifications/` | `certifications_list_view` | `AllowAny` | Catalogue ANCPS synchronisé dans Radar |
+| GET | `certifications/<id>/` | `certification_detail_view` | `AllowAny` | Détail ANCPS par identifiant source |
 | GET | `status/` | `status_view:220` | `AllowAny` | total, sectors, last_update |
 | GET | `health/` | `health_check_view:380` | `AllowAny` | scraping + config |
 | GET | `monitoring/` | `scraping_status_view:422` | `AllowAny` | par source/région |
@@ -138,6 +143,30 @@ Env : `GROQ_API_KEY`, `BAKELI_AI_URL`, `JWT_SECRET`
 ---
 
 ## 8. Automatisation
+
+### Certifications ANCPS
+
+Le backend scrape l'annuaire web ANCPS avec `nodriver` (Chromium sans interface)
+et extrait les fiches affichées ainsi que leurs pages de détail. Les données
+sont conservées dans le modèle Django `ANCPSCertification`. Le frontend Radar
+appelle uniquement les routes `/api/radar_jobs/certifications/`; il ne contacte
+pas le serveur ANCPS. Le nombre de fiches affiché dans l'annuaire est comparé
+au nombre de fiches extraites; une page incomplète ou modifiée interrompt le
+scraping sans désactiver les fiches existantes.
+
+```bash
+python manage.py migrate
+python manage.py sync_ancps_certifications
+```
+
+Le scraping est également planifié quotidiennement à 03:00 via Celery Beat.
+`ANCPS_ANNUAIRE_URL` peut remplacer l'URL source; sa valeur par défaut est
+`https://ancps-senegal.vercel.app/annuaire`. Le runtime doit disposer de
+Chromium et de ses bibliothèques système pour exécuter `nodriver`.
+
+Les fiches récupérées sont conservées dans la base Radar et les fiches qui ne
+sont plus publiées dans le flux ANCPS sont désactivées, sans supprimer leur
+historique.
 
 **Windows local**
 ```powershell
