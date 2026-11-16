@@ -109,6 +109,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'social_django',
     'whatsapp_bot',
+    'annuaire',
 ]
 
 from corsheaders.defaults import default_headers
@@ -351,6 +352,13 @@ BREVO_SENDER_EMAIL = os.getenv('BREVO_SENDER_EMAIL', 'noreply@bakeli.tech')
 BREVO_SENDER_NAME = os.getenv('BREVO_SENDER_NAME', 'Bakeli Radar')
 
 # =============================================
+# ANNUAIRE ANCPS (formations et certifications)
+# =============================================
+ANCPS_API_URL = os.getenv("ANCPS_API_URL", "https://ancps-senegal-cvke.onrender.com/api")
+ANCPS_TIMEOUT = int(os.getenv("ANCPS_TIMEOUT", "45"))  # secondes (Render a mis ~26 s à se réveiller)
+ANCPS_CACHE_TTL = int(os.getenv("ANCPS_CACHE_TTL", "300"))  # cache frais : 5 min
+ANCPS_STALE_TTL = int(os.getenv("ANCPS_STALE_TTL", "86400"))  # copie de secours : 24 h
+# =============================================
 # SWAGGER
 # =============================================
 
@@ -364,3 +372,27 @@ SWAGGER_SETTINGS = {
         }
     },
 }
+
+
+# ==========================================
+# CACHE ANCPS
+# ==========================================
+
+REDIS_CACHE_URL = os.getenv("REDIS_CACHE_URL")
+
+if REDIS_CACHE_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_CACHE_URL,
+            "KEY_PREFIX": "wagan",
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "wagan-ancps-cache",
+            "KEY_PREFIX": "wagan",
+        }
+    }

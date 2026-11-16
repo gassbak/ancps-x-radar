@@ -33,3 +33,4 @@ logs/
 
 # Métadonnées du dernier run (régénéré à chaque scraping)
 media/data/last_run.json
+venv312/
