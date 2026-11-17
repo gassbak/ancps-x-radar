@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
-import { apiService } from '../services/api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, ExternalLink, Heart } from 'lucide-react';
+import { apiService, isAnnuaireBackendEnabled, trackAnnuaireEvent } from '../services/api';
+import { useCompareList } from '../services/compareStore';
 
 const getLabel = (value) => {
   if (typeof value === 'string' || typeof value === 'number') {
@@ -33,13 +34,46 @@ const DetailField = ({ label, value }) => (
   </div>
 );
 
+const isHttpUrl = (value) => typeof value === 'string' && /^https?:\/\//i.test(value);
+
 export const FormationDetailPage = () => {
   const { id } = useParams();
+  const queryClient = useQueryClient();
+  const loggedIn = apiService.isLoggedIn();
+  const compare = useCompareList();
+
   const { data: certification, isLoading, error } = useQuery({
-    queryKey: ['certification', id],
-    queryFn: () => apiService.getCertification(id),
+    queryKey: ['certification', id, isAnnuaireBackendEnabled],
+    queryFn: () =>
+      isAnnuaireBackendEnabled
+        ? apiService.getAnnuaireFormation(id)
+        : apiService.getCertification(id),
     enabled: Boolean(id),
   });
+
+  // Favoris : uniquement avec le backend Radar et un compte connecté.
+  const favoritesEnabled = isAnnuaireBackendEnabled && loggedIn;
+  const { data: favorites } = useQuery({
+    queryKey: ['annuaire-favorites'],
+    queryFn: () => apiService.getAnnuaireFavorites(),
+    enabled: favoritesEnabled,
+    retry: false,
+  });
+  const isSaved = Boolean(favorites?.favorites?.some((fav) => fav.formation_id === String(id)));
+
+  const toggleFavorite = useMutation({
+    mutationFn: (saved) =>
+      saved ? apiService.removeAnnuaireFavorite(id) : apiService.addAnnuaireFavorite(id),
+    onSuccess: (_result, wasSaved) => {
+      if (!wasSaved) trackAnnuaireEvent('formation_saved', { formationId: id });
+      queryClient.invalidateQueries({ queryKey: ['annuaire-favorites'] });
+    },
+  });
+
+  const loaded = Boolean(certification);
+  useEffect(() => {
+    if (loaded) trackAnnuaireEvent('formation_viewed', { formationId: id });
+  }, [id, loaded]);
 
   if (isLoading) {
     return (
@@ -68,14 +102,8 @@ export const FormationDetailPage = () => {
 
   const title = getLabel(certification.title) || getLabel(certification.sigle) || 'Formation';
   const organization = getLabel(certification.organisme);
-  const website = certification.organisme?.siteWeb;
-  const sourceUrl = certification.sourceUrl;
-  const safeWebsite = typeof website === 'string' && /^https?:\/\//i.test(website)
-    ? website
-    : '';
-  const safeSourceUrl = typeof sourceUrl === 'string' && /^https?:\/\//i.test(sourceUrl)
-    ? sourceUrl
-    : '';
+  const safeWebsite = isHttpUrl(certification.organisme?.siteWeb) ? certification.organisme.siteWeb : '';
+  const safeSourceUrl = isHttpUrl(certification.sourceUrl) ? certification.sourceUrl : '';
   const cost = ['cout', 'coût', 'prix', 'cost', 'price', 'frais', 'fraisInscription']
     .map((field) => certification[field])
     .map(getLabel)
@@ -105,15 +133,23 @@ export const FormationDetailPage = () => {
     { label: 'Dernière vérification', value: certification.sourceLastVerifiedAt },
   ];
 
+  const trackOutbound = (target) =>
+    trackAnnuaireEvent('outbound_registration_clicked', { formationId: id, detail: target });
+
   return (
     <article className="mx-auto max-w-4xl space-y-6 py-2 animate-fadeIn">
-      <Link
-        to="/formations"
-        className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-emerald-700"
-      >
-        <ArrowLeft aria-hidden="true" className="h-4 w-4" />
-        Retour au catalogue
-      </Link>
+      <nav className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        <Link
+          to="/formations"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-emerald-700"
+        >
+          <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+          Retour au catalogue
+        </Link>
+        <Link to="/" className="text-sm font-semibold text-gray-600 hover:text-emerald-700">
+          Retour au tableau de bord
+        </Link>
+      </nav>
 
       <header className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
         <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">
@@ -131,31 +167,75 @@ export const FormationDetailPage = () => {
             </p>
           </section>
         )}
-        {(safeWebsite || safeSourceUrl) && (
-          <div className="mt-6 flex flex-wrap gap-3 border-t border-gray-100 pt-5">
-            {safeWebsite && (
-              <a
-                href={safeWebsite}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+        <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-5">
+          {safeWebsite && (
+            <a
+              href={safeWebsite}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => trackOutbound('website')}
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+            >
+              Visiter le site officiel
+              <ExternalLink aria-hidden="true" className="h-4 w-4" />
+            </a>
+          )}
+          {safeSourceUrl && (
+            <a
+              href={safeSourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => trackOutbound('source')}
+              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              Voir la source
+              <ExternalLink aria-hidden="true" className="h-4 w-4" />
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={() => compare.toggle(id)}
+            aria-pressed={compare.has(id)}
+            disabled={!compare.has(id) && compare.isFull}
+            title={!compare.has(id) && compare.isFull ? 'Vous pouvez comparer 3 formations au maximum' : undefined}
+            className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {compare.has(id) ? 'Retirer de la comparaison' : 'Comparer'}
+          </button>
+          {compare.ids.length >= 2 && (
+            <Link to="/formations/comparer" className="text-sm font-semibold text-emerald-700 hover:underline">
+              Voir la comparaison ({compare.ids.length})
+            </Link>
+          )}
+          {!safeWebsite && !safeSourceUrl && (
+            <p className="text-sm text-gray-500">Aucun lien officiel n’est renseigné pour cette fiche.</p>
+          )}
+          {isAnnuaireBackendEnabled && (
+            loggedIn ? (
+              <button
+                type="button"
+                onClick={() => toggleFavorite.mutate(isSaved)}
+                disabled={toggleFavorite.isPending || !favorites}
+                aria-pressed={isSaved}
+                className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
               >
-                Site de l’organisme
-                <ExternalLink aria-hidden="true" className="h-4 w-4" />
-              </a>
-            )}
-            {safeSourceUrl && (
-              <a
-                href={safeSourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                <Heart aria-hidden="true" className={`h-4 w-4 ${isSaved ? 'fill-emerald-600' : ''}`} />
+                {isSaved ? 'Enregistrée' : 'Enregistrer'}
+              </button>
+            ) : (
+              <Link
+                to={`/connexion?next=${encodeURIComponent(`/formations/${id}`)}`}
+                className="text-sm font-semibold text-emerald-700 hover:underline"
               >
-                Voir la source
-                <ExternalLink aria-hidden="true" className="h-4 w-4" />
-              </a>
-            )}
-          </div>
+                Connectez-vous à Radar pour enregistrer cette formation
+              </Link>
+            )
+          )}
+        </div>
+        {toggleFavorite.isError && (
+          <p role="alert" className="mt-3 text-sm text-red-700">
+            {toggleFavorite.error?.message || 'Action impossible pour le moment.'}
+          </p>
         )}
       </header>
 
@@ -166,6 +246,11 @@ export const FormationDetailPage = () => {
             <DetailField key={label} label={label} value={value} />
           ))}
         </dl>
+        <p className="mt-5 text-xs text-gray-500">
+          Les informations « Non renseigné » ne sont pas disponibles dans la source. La présence
+          d’un organisme dans l’annuaire ne constitue pas une reconnaissance ou une accréditation
+          officielle.
+        </p>
       </section>
     </article>
   );

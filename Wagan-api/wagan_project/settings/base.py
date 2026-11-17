@@ -363,6 +363,7 @@ ANCPS_API_URL = os.getenv("ANCPS_API_URL", "https://ancps-senegal-cvke.onrender.
 ANCPS_TIMEOUT = int(os.getenv("ANCPS_TIMEOUT", "45"))  # secondes (Render a mis ~26 s à se réveiller)
 ANCPS_CACHE_TTL = int(os.getenv("ANCPS_CACHE_TTL", "300"))  # cache frais : 5 min
 ANCPS_STALE_TTL = int(os.getenv("ANCPS_STALE_TTL", "86400"))  # copie de secours : 24 h
+ANCPS_CHAT_TIMEOUT = int(os.getenv("ANCPS_CHAT_TIMEOUT", "8"))  # secondes : délai court pour l'assistant IA
 # =============================================
 # SWAGGER
 # =============================================

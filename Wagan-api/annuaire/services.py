@@ -32,13 +32,13 @@ class AncpsNotFound(AncpsError):
         super().__init__(message, status=404)
 
 
-def _request_json(endpoint):
+def _request_json(endpoint, timeout=None):
     url = f"{settings.ANCPS_API_URL.rstrip('/')}{endpoint}"
     try:
         resp = requests.get(
             url,
             headers={'Accept': 'application/json'},
-            timeout=settings.ANCPS_TIMEOUT,
+            timeout=timeout or settings.ANCPS_TIMEOUT,
         )
     except requests.Timeout:
         logger.warning("ANCPS timeout: %s", endpoint)
@@ -59,13 +59,13 @@ def _request_json(endpoint):
         raise AncpsError("L'annuaire ANCPS a renvoyé une réponse invalide.", 502)
 
 
-def _cached_fetch(key, endpoint):
+def _cached_fetch(key, endpoint, timeout=None):
     """Retourne (données, stale). `stale` vrai = copie de secours (ANCPS en panne)."""
     fresh = cache.get(key)
     if fresh is not None:
         return fresh, False
     try:
-        data = _request_json(endpoint)
+        data = _request_json(endpoint, timeout)
     except AncpsNotFound:
         raise
     except AncpsError:
@@ -79,9 +79,9 @@ def _cached_fetch(key, endpoint):
     return data, False
 
 
-def get_certifications():
-    """Liste des fiches publiées : (liste, stale)."""
-    data, stale = _cached_fetch(LIST_CACHE_KEY, '/certifications?published=true')
+def get_certifications(timeout=None):
+    """Liste des fiches publiées : (liste, stale). `timeout` (secondes) remplace le délai par défaut."""
+    data, stale = _cached_fetch(LIST_CACHE_KEY, '/certifications?published=true', timeout)
     items = data if isinstance(data, list) else (data.get('data') if isinstance(data, dict) else None)
     if not isinstance(items, list):
         logger.error("ANCPS: format de liste inattendu")

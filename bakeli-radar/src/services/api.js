@@ -14,6 +14,76 @@ const CV_API_URL = normalizeBaseUrl(import.meta.env.VITE_CV_API_URL, "https://ap
 const AUTH_API_URL = normalizeBaseUrl(import.meta.env.VITE_AUTH_API_URL, "https://api-wagan.bakeli.tech/api/auth");
 const ANCPS_API_URL = (import.meta.env.VITE_ANCPS_API_URL || "https://ancps-senegal-cvke.onrender.com/api").replace(/\/+$/, "");
 
+
+// Backend Wagan : couche d'intégration de l'annuaire ANCPS (/api/annuaire/).
+// Vide = désactivé : Radar continue d'appeler ANCPS directement (comportement historique).
+const ANNUAIRE_API_URL = (import.meta.env.VITE_ANNUAIRE_API_URL || "").trim().replace(/\/+$/, "");
+export const isAnnuaireBackendEnabled = Boolean(ANNUAIRE_API_URL);
+
+
+// Identifiant de session anonyme (aléatoire, lié à l'onglet) pour les statistiques d'usage.
+const getAnnuaireSessionId = () => {
+  try {
+    let id = sessionStorage.getItem("annuaire_session_id");
+    if (!id) {
+      id = typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+      sessionStorage.setItem("annuaire_session_id", id);
+    }
+    return id;
+  } catch {
+    return "";
+  }
+};
+
+// Suivi d'usage anonyme (cahier des charges, section 11). Ne bloque et ne casse jamais l'interface.
+export const trackAnnuaireEvent = (event, { formationId = "", detail = "", resultCount = null } = {}) => {
+  if (!isAnnuaireBackendEnabled) return;
+  try {
+    const body = { event };
+    const sessionId = getAnnuaireSessionId();
+    if (sessionId) body.session_id = sessionId;
+    if (formationId) body.formation_id = String(formationId);
+    if (detail) body.detail = String(detail).slice(0, 60);
+    if (Number.isInteger(resultCount) && resultCount >= 0) body.result_count = resultCount;
+    fetch(`${ANNUAIRE_API_URL}/events/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    // le suivi ne doit jamais gêner l'utilisateur
+  }
+};
+
+const fetchAnnuaireJson = async (endpoint) => {
+  let response;
+  try {
+    response = await fetch(`${ANNUAIRE_API_URL}${endpoint}`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+  } catch {
+    throw new Error("Impossible de joindre le serveur Radar. Vérifiez votre connexion.");
+  }
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    payload = null;
+  }
+  if (!response.ok) {
+    throw new Error(payload?.error || `Erreur du serveur (${response.status}).`);
+  }
+  if (!payload || typeof payload !== "object") {
+    throw new Error("Le serveur a renvoyé une réponse invalide.");
+  }
+  return payload;
+};
+
 const fetchAncpsJson = async (endpoint) => {
   const response = await fetch(`${ANCPS_API_URL}${endpoint}`, {
     method: "GET",
@@ -161,7 +231,51 @@ const apiFetch = async (baseUrl, endpoint, options = {}) => {
   }
 };
 
+// Renouvelle le jeton d'accès (durée de vie courte, 5 min) avec le jeton de rafraîchissement.
+const refreshAccessToken = async () => {
+  const refresh = localStorage.getItem("jwt_refresh");
+  if (!refresh) return false;
+  try {
+    const res = await apiFetch(AUTH_API_URL, "/jwt/refresh/", {
+      method: "POST",
+      body: JSON.stringify({ refresh }),
+    });
+    if (res.access) {
+      localStorage.setItem("jwt_token", res.access);
+      return true;
+    }
+  } catch {
+    // jeton de rafraîchissement expiré : l'utilisateur devra se reconnecter
+  }
+  localStorage.removeItem("jwt_token");
+  localStorage.removeItem("jwt_refresh");
+  return false;
+};
+
+const withTokenRefresh = async (call) => {
+  try {
+    return await call();
+  } catch (err) {
+    if (!/status: (401|403)\b/.test(String(err?.message || ""))) throw err;
+    if (!(await refreshAccessToken())) throw err;
+    return call();
+  }
+};
+
 export const apiService = {
+  // Connexion par email (le compte Wagan utilise l'email comme identifiant)
+  async loginWithEmail(email, password) {
+    const res = await apiFetch(AUTH_API_URL, "/jwt/create/", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.access) {
+      throw new Error("Réponse de connexion invalide.");
+    }
+    localStorage.setItem("jwt_token", res.access);
+    if (res.refresh) localStorage.setItem("jwt_refresh", res.refresh);
+    return res;
+  },
   // Authentication JWT
   async login(username, password) {
     const res = await apiFetch(AUTH_API_URL, "/jwt/create/", {
@@ -597,4 +711,42 @@ async getCertification(id) {
   return certification;
 },
 
+async getAnnuaireFormations({ page = 1, pageSize = 12, search = "", filters = {} } = {}) {
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("page_size", String(pageSize));
+  if (search && search.trim()) params.set("q", search.trim());
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value) params.set(key, value);
+  });
+  return fetchAnnuaireJson(`/formations/?${params.toString()}`);
+},
+
+async getAnnuaireFormation(id) {
+  if (!id) {
+    throw new Error("L'identifiant de la formation est requis.");
+  }
+  const result = await fetchAnnuaireJson(`/formations/${encodeURIComponent(id)}/`);
+  return result.data;
+},
+async getAnnuaireFavorites() {
+  return withTokenRefresh(() => apiFetch(ANNUAIRE_API_URL, "/me/favorites/"));
+},
+
+async addAnnuaireFavorite(formationId) {
+  return withTokenRefresh(() =>
+    apiFetch(ANNUAIRE_API_URL, "/me/favorites/", {
+      method: "POST",
+      body: JSON.stringify({ formation_id: String(formationId) }),
+    })
+  );
+},
+
+async removeAnnuaireFavorite(formationId) {
+  return withTokenRefresh(() =>
+    apiFetch(ANNUAIRE_API_URL, `/me/favorites/${encodeURIComponent(formationId)}/`, {
+      method: "DELETE",
+    })
+  );
+},
 };
