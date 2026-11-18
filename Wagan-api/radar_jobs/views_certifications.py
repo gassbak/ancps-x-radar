@@ -23,9 +23,7 @@ def _certification_record(certification):
 def certifications_list_view(request):
     certifications = ANCPSCertification.objects.all().order_by('title', 'source_id')
     if request.query_params.get("published", "").lower() == "true":
-        certifications = certifications.filter(is_published=True).exclude(
-            payload__published=False
-        ).exclude(data__published=False)
+        certifications = certifications.filter(is_published=True)
     records = [_certification_record(certification) for certification in certifications]
     return Response({
         "data": records,
@@ -49,4 +47,7 @@ def certification_detail_view(request, source_id):
         )
     except ANCPSCertification.DoesNotExist:
         return Response({"detail": "Certification introuvable."}, status=404)
-    return Response(_certification_record(certification))
+    record = _certification_record(certification)
+    if not certification.data:
+        return Response({"data": record})
+    return Response(record)
