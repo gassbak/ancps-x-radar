@@ -29,3 +29,19 @@ class JobAlert(models.Model):
     def __str__(self):
         criteria = self.keywords or self.sector or self.job_type or 'toutes offres'
         return f"{self.email} — {criteria} ({self.frequency})"
+
+
+class ANCPSCertification(models.Model):
+    """Fiche de certification récupérée depuis l'annuaire public de l'ANCPS."""
+
+    source_id = models.CharField(max_length=255, unique=True)
+    title = models.CharField(max_length=500)
+    source_url = models.URLField(max_length=1000)
+    payload = models.JSONField(default=dict)
+    last_scraped_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['title', 'source_id']
+
+    def __str__(self):
+        return self.title

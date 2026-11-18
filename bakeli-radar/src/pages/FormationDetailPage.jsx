@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { apiService } from '../services/api';
+import { getOfficialOrganizationWebsite } from '../utils/certificationSources';
 
 const getLabel = (value) => {
   if (typeof value === 'string' || typeof value === 'number') {
@@ -68,7 +69,7 @@ export const FormationDetailPage = () => {
 
   const title = getLabel(certification.title) || getLabel(certification.sigle) || 'Formation';
   const organization = getLabel(certification.organisme);
-  const website = certification.organisme?.siteWeb;
+  const website = getOfficialOrganizationWebsite(certification);
   const sourceUrl = certification.sourceUrl;
   const safeWebsite = typeof website === 'string' && /^https?:\/\//i.test(website)
     ? website
@@ -132,29 +133,35 @@ export const FormationDetailPage = () => {
           </section>
         )}
         {(safeWebsite || safeSourceUrl) && (
-          <div className="mt-6 flex flex-wrap gap-3 border-t border-gray-100 pt-5">
-            {safeWebsite && (
-              <a
-                href={safeWebsite}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
-              >
-                Site de l’organisme
-                <ExternalLink aria-hidden="true" className="h-4 w-4" />
-              </a>
-            )}
-            {safeSourceUrl && (
-              <a
-                href={safeSourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-              >
-                Voir la source
-                <ExternalLink aria-hidden="true" className="h-4 w-4" />
-              </a>
-            )}
+          <div className="mt-6 space-y-4 border-t border-gray-100 pt-5">
+            <p className="text-sm text-gray-600">
+              Les informations de cette fiche sont récupérées automatiquement (scraping)
+              depuis l’annuaire ANCPS. Vérifiez-les auprès de l’organisme avant toute démarche.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              {safeWebsite && (
+                <a
+                  href={safeWebsite}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+                >
+                  Site officiel de l’organisme
+                  <ExternalLink aria-hidden="true" className="h-4 w-4" />
+                </a>
+              )}
+              {safeSourceUrl && (
+                <a
+                  href={safeSourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  Voir la fiche ANCPS (source des données)
+                  <ExternalLink aria-hidden="true" className="h-4 w-4" />
+                </a>
+              )}
+            </div>
           </div>
         )}
       </header>

@@ -33,6 +33,12 @@ L'utilisateur peut cliquer sur **« Scorer mon CV sur cette offre »** depuis n'
 ## 🛠️ 3. CONFIGURATION ET LANCEMENT LOCAL
 
 ### Backend (`wagan-api`)
+- Utiliser Python 3.11, puis installer les dépendances dans un environnement virtuel :
+  ```bash
+  py -3.11 -m venv .venv
+  source .venv/Scripts/activate
+  python -m pip install -r requirements.txt
+  ```
 - Fichier `.env` requis à la racine :
   ```env
   GROQ_API_KEY=gsk_...
@@ -41,8 +47,10 @@ L'utilisateur peut cliquer sur **« Scorer mon CV sur cette offre »** depuis n'
 - Commandes :
   ```bash
   python manage.py migrate
+  python manage.py scrape_ancps_certifications
   python manage.py runserver
   ```
+  Le catalogue est lu depuis les fiches rendues sur `https://ancps-senegal.vercel.app/annuaire`, enregistré en base, puis servi par `/api/radar_jobs/certifications/`. Pour tester le scraper sur quelques fiches : `python manage.py scrape_ancps_certifications --limit 3`.
 
 ### Frontend (`Bakeli_radar`)
 - Fichier `.env` configuré pour pointer vers le backend local :
