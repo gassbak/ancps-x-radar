@@ -49,6 +49,7 @@ const isHttpUrl = (value) =>
 
 export const getOfficialOrganizationWebsite = (certification) => {
   const providedWebsite =
+    certification?.officialUrl ||
     certification?.officialWebsite ||
     certification?.siteWeb ||
     certification?.organisme?.siteWeb;

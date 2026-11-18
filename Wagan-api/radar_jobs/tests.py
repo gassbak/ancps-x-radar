@@ -1,8 +1,8 @@
 import pandas as pd
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from rest_framework.test import APITestCase
 
-from radar_jobs.models import JobAlert
+from radar_jobs.models import ANCPSCertification, JobAlert
 
 from radar_jobs.processing.cleaner import DataCleaner
 from radar_jobs.services.jobs_store import load_jobs_df
@@ -54,6 +54,229 @@ class JobsApiTests(APITestCase):
         self.assertIn("total_jobs", r.data)
         for key in ("top_skills", "contracts_distribution", "top_companies", "sectors_distribution", "top_sector_share"):
             self.assertIn(key, r.data)
+
+
+class ANCPSCertificationApiTests(APITestCase):
+    def setUp(self):
+        self.payload = {
+            "_id": "ancps-cert-1",
+            "title": "Certification Python",
+            "published": True,
+            "domaine": {"nom": "Numérique"},
+        }
+        ANCPSCertification.objects.create(
+            source_id="ancps-cert-1",
+            title="Certification Python",
+            data=self.payload,
+        )
+
+    def test_list_returns_synchronized_certifications(self):
+        response = self.client.get("/api/radar_jobs/certifications/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"], [self.payload])
+        self.assertEqual(response.data["pagination"]["total"], 1)
+
+    def test_detail_returns_synchronized_certification(self):
+        response = self.client.get("/api/radar_jobs/certifications/ancps-cert-1/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, self.payload)
+
+    def test_detail_returns_404_for_missing_certification(self):
+        response = self.client.get("/api/radar_jobs/certifications/missing/")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_api_adds_official_source_without_changing_scraped_source_url(self):
+        certification = ANCPSCertification.objects.create(
+            source_id="crm-cert",
+            title="Certificat CRM Salesforce",
+            data={
+                "_id": "crm-cert",
+                "title": "Certificat CRM Salesforce",
+                "sourceUrl": "https://ancps.example/certification/crm-cert",
+            },
+        )
+
+        response = self.client.get(f"/api/radar_jobs/certifications/{certification.source_id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data["officialUrl"],
+            "https://online.groupeism.sn/formations-isf-certifiantes/certificat-crm-salesforce",
+        )
+        self.assertEqual(
+            response.data["sourceUrl"],
+            "https://ancps.example/certification/crm-cert",
+        )
+        self.assertNotIn("officialUrl", certification.data)
+
+    def test_api_adds_google_researched_source_without_changing_ancps_source(self):
+        certification = ANCPSCertification.objects.create(
+            source_id="nutrition-bts",
+            title="BTS Nutrition diététique",
+            data={
+                "_id": "nutrition-bts",
+                "title": "BTS Nutrition diététique",
+                "sourceUrl": "https://ancps.example/certification/nutrition-bts",
+            },
+        )
+
+        response = self.client.get(f"/api/radar_jobs/certifications/{certification.source_id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data["officialUrl"],
+            "https://www.sencampus.com/formations/bts-nutrition-dietetique-ifaa",
+        )
+        self.assertEqual(
+            response.data["sourceUrl"],
+            "https://ancps.example/certification/nutrition-bts",
+        )
+        self.assertNotIn("officialUrl", certification.data)
+
+class ANCPSCertificationSyncTests(APITestCase):
+    @patch(
+        "radar_jobs.services.ancps_sync._scrape_published_certifications",
+        new_callable=AsyncMock,
+        return_value=[
+            {
+                "_id": "new-cert",
+                "title": "Nouvelle fiche",
+                "published": True,
+            },
+        ],
+    )
+    def test_sync_creates_and_deactivates_records_from_complete_scrape(self, mock_scrape):
+        from radar_jobs.services.ancps_sync import sync_ancps_certifications
+
+        stale = ANCPSCertification.objects.create(
+            source_id="old-cert",
+            title="Ancienne fiche",
+            data={"_id": "old-cert", "title": "Ancienne fiche"},
+        )
+
+        result = sync_ancps_certifications(annuaire_url="https://ancps.example/annuaire")
+
+        self.assertEqual(result, {"received": 1, "created": 1, "updated": 0, "deactivated": 1})
+        self.assertFalse(ANCPSCertification.objects.get(pk=stale.pk).is_published)
+        self.assertEqual(
+            ANCPSCertification.objects.get(source_id="new-cert").data["title"],
+            "Nouvelle fiche",
+        )
+        mock_scrape.assert_called_once_with("https://ancps.example/annuaire")
+
+    @patch(
+        "radar_jobs.services.ancps_sync._scrape_published_certifications",
+        new_callable=AsyncMock,
+        return_value=[],
+    )
+    def test_empty_scrape_does_not_deactivate_existing_records(self, mock_scrape):
+        from radar_jobs.services.ancps_sync import sync_ancps_certifications
+
+        record = ANCPSCertification.objects.create(
+            source_id="existing-cert",
+            title="Fiche existante",
+            data={"title": "Fiche existante"},
+        )
+
+        result = sync_ancps_certifications()
+
+        self.assertEqual(result, {"received": 0, "created": 0, "updated": 0, "deactivated": 0})
+        self.assertTrue(ANCPSCertification.objects.get(pk=record.pk).is_published)
+
+
+class ANCPSCertificationScraperTests(APITestCase):
+    def test_listing_parser_extracts_cards_and_checks_complete_result_count(self):
+        from radar_jobs.services.ancps_sync import _parse_listing
+
+        html = """
+        <main>
+          <p>2 certifications trouvées</p>
+          <a href="/certification/cert-1">
+            <div class="flex flex-wrap gap-2">
+              <span>Licence</span><span>Formation / Diplôme</span>
+            </div>
+            <h2>Licence Informatique</h2>
+            <p>Domaine</p><p>Numérique</p>
+          </a>
+          <a href="/certification/cert-2">
+            <div class="flex flex-wrap gap-2"><span>Certification</span></div>
+            <h2>Développeur Web</h2>
+            <p>Domaine</p><p>Informatique</p>
+          </a>
+        </main>
+        """
+
+        cards = _parse_listing(html, "https://ancps.example/annuaire")
+
+        self.assertEqual(len(cards), 2)
+        self.assertEqual(cards[0]["source_id"], "cert-1")
+        self.assertEqual(cards[0]["title"], "Licence Informatique")
+        self.assertEqual(cards[0]["type"], "Formation / Diplôme")
+        self.assertEqual(cards[0]["level"], "Licence")
+        self.assertEqual(cards[0]["domain"], "Numérique")
+        self.assertEqual(cards[1]["url"], "https://ancps.example/certification/cert-2")
+
+    def test_listing_parser_rejects_partial_or_changed_listing(self):
+        from radar_jobs.services.ancps_sync import _parse_listing
+
+        with self.assertRaisesRegex(ValueError, "Liste ANCPS incomplète"):
+            _parse_listing(
+                '<main><p>2 certifications trouvées</p>'
+                '<a href="/certification/cert-1"><h2>Certification</h2></a></main>',
+                "https://ancps.example/annuaire",
+            )
+
+    def test_detail_parser_extracts_scraped_fields(self):
+        from radar_jobs.services.ancps_sync import _detail_data
+
+        html = """
+        <header><div>
+          <div><span>Formation / Diplôme</span><span>Licence</span><span>Vérifiée</span></div>
+          <h1>Licence Informatique</h1>
+          <p>Université de Dakar<span>Sénégal</span></p>
+        </div></header>
+        <main>
+          <section><h2>Présentation</h2><p>Formation professionnelle en informatique.</p></section>
+          <section><h2>Objectifs de la formation</h2><p>Former des professionnels.</p></section>
+          <section><h2>Blocs de compétences</h2><ul><li>Développement web</li></ul></section>
+          <section><h2>Informations complémentaires</h2><div>
+            <div><p>Sigle</p><p>LI</p></div>
+            <div><p>Domaine</p><p>Numérique</p></div>
+            <div><p>Métiers associés</p><p>Développeur</p></div>
+            <div><p>Établissements</p><p>Université de Dakar</p></div>
+          </div></section>
+          <aside><div>
+            <h2>Informations clés</h2>
+            <div><div><p>Niveau</p><p>Licence</p></div>
+            <div><p>Type</p><p>Formation / Diplôme</p></div>
+            <div><p>Durée</p><p>3 ans</p></div>
+            <div><p>Modalité</p><p>Présentiel</p></div>
+            <div><p>Organisme certificateur</p><p>Université de Dakar</p></div>
+            <div><p>Domaine</p><p>Numérique</p></div>
+            <div><p>Pays</p><p>Sénégal</p></div></div>
+          </div></aside>
+        </main>
+        """
+        card = {
+            "source_id": "cert-1",
+            "title": "Licence Informatique",
+            "type": "Formation / Diplôme",
+            "level": "Licence",
+            "domain": "Numérique",
+        }
+
+        record = _detail_data(html, card, "https://ancps.example/certification/cert-1")
+
+        self.assertEqual(record["title"], "Licence Informatique")
+        self.assertEqual(record["organisme"], "Université de Dakar")
+        self.assertEqual(record["niveauSortie"], "Licence")
+        self.assertEqual(record["duree"], "3 ans")
+        self.assertEqual(record["competences"], ["Développement web"])
+        self.assertEqual(record["statutVerification"], "Vérifiée")
+        self.assertTrue(record["published"])
 
 
 class CleanerTests(APITestCase):

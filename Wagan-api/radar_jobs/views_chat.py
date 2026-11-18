@@ -13,6 +13,7 @@ from rest_framework.permissions import AllowAny
 
 from radar_jobs.services.jobs_store import load_jobs_df as load_jobs_df_cached
 from radar_jobs.utils.ai_client import ask
+from annuaire.ai_context import build_formations_context
 from radar_jobs.views_helpers import (
     _resolve_ai_model,
     clean_df_for_json,
@@ -172,6 +173,8 @@ def chat_view(request):
             _offer_count = len(filtered_df) if 'filtered_df' in locals() and filtered_df is not None else 0
         except:
             _offer_count = 0
+                # Formations ANCPS : uniquement pour les questions de formation (ne lève jamais d'erreur)
+        formations = build_formations_context(user_query)
 
         system_prompt = f"""Tu es l'Expert Analyste de 'Sénégal Job IA'. Tu aides les candidats à trouver des opportunités au Sénégal.
 
@@ -208,6 +211,10 @@ Termine par une phrase d'accroche avec un emoji.
 - INTERDIT d'inventer une carte template. N'affiche qu'une carte par offre réelle listée dans OFFRES DISPONIBLES, en reprenant exactement ses champs JSON.
 - Si aucune offre n'est trouvée, propose des alternatives (secteur similaire, région élargie)
 """
+
+
+        if formations:
+             system_prompt += formations["prompt_section"]
         # Cache 5 min par query normalisée
         import time
         _cache_key = user_query.lower().strip()[:80]
@@ -271,6 +278,10 @@ Termine par une phrase d'accroche avec un emoji.
                     except:
                         pass
                 logger.warning(f"Rate limit 429, fallback local, Retry-After: {retry_after}")
+                                # Questions de formation : renvoie les formations ANCPS sans passer par Groq
+                if formations and formations["fallback_text"]:
+                    _CHAT_CACHE[_cache_key] = (time.time(), formations["fallback_text"])
+                    return JsonResponse({"response": formations["fallback_text"]})
                 # Fallback : renvoie les offres directement sans passer par Groq
                 if 'filtered_df' in locals() and filtered_df is not None and not filtered_df.empty:
                     fallback_lines = [f"🎯 **{len(filtered_df)} offres trouvées** pour « {user_query} »\n"]

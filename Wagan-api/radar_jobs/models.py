@@ -32,16 +32,22 @@ class JobAlert(models.Model):
 
 
 class ANCPSCertification(models.Model):
-    """Fiche de certification récupérée depuis l'annuaire public de l'ANCPS."""
+    """Certification ANCPS avec les données scrapées et synchronisées."""
 
     source_id = models.CharField(max_length=255, unique=True)
-    title = models.CharField(max_length=500)
-    source_url = models.URLField(max_length=1000)
+    title = models.CharField(max_length=500, blank=True, default='', db_index=True)
     payload = models.JSONField(default=dict)
-    last_scraped_at = models.DateTimeField(auto_now=True)
+    source_url = models.URLField(max_length=1000, blank=True, default='')
+    last_scraped_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+    data = models.JSONField(default=dict)
+    is_published = models.BooleanField(default=True, db_index=True)
+    source_updated_at = models.DateTimeField(null=True, blank=True)
+    last_synced_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 
     class Meta:
+        verbose_name = "Certification ANCPS"
+        verbose_name_plural = "Certifications ANCPS"
         ordering = ['title', 'source_id']
 
     def __str__(self):
-        return self.title
+        return self.title or self.source_id

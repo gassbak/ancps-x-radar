@@ -1,11 +1,21 @@
 from celery import shared_task
 from radar_jobs.services.pipeline import run_pipeline
+from radar_jobs.services.ancps_sync import sync_ancps_certifications
 from radar_jobs.services.email_service import send_scraping_alert, send_scraping_success_report
 from django.conf import settings
 import logging
 import asyncio
 
 logger = logging.getLogger(__name__)
+
+
+@shared_task
+def sync_ancps_certifications_task():
+    """Scrape les certifications ANCPS publiées dans la base Radar."""
+    logger.info("Scraping ANCPS démarré")
+    result = sync_ancps_certifications()
+    logger.info("Scraping ANCPS terminé: %s", result)
+    return result
 
 
 @shared_task
