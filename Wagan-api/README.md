@@ -55,6 +55,9 @@ DATABASE=sqlite:///db.sqlite3
 
 # APIs
 BAKELI_AI_KEY=votre_cle_bakeli_groq
+GROQ_API_KEY=votre_cle_groq
+# Optionnel : le modèle configuré par défaut peut être remplacé ici
+GROQ_MODEL=openai/gpt-oss-20b
 WHATSAPP_TOKEN=votre_token_meta
 WHATSAPP_PHONE_NUMBER_ID=votre_phone_id
 WHATSAPP_VERIFY_TOKEN=votre_webhook_verify_token
@@ -64,6 +67,10 @@ WHATSAPP_ADMIN_NUMBER=221770000000
 DISCORD_WEBHOOK_URL=votre_url_webhook
 DISCORD_MENTION=<@ID_DU_ROLE>
 ```
+
+`GROQ_API_KEY` est utilisé par l'assistant Radar côté backend. Gardez cette clé
+dans le fichier `.env` du backend ou dans les variables secrètes de l'hébergeur ;
+ne la placez jamais dans le `.env.local` du frontend ni dans une variable `VITE_*`.
 
 **Lancement du backend :**
 ```bash
